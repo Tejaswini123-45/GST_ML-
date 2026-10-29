@@ -494,3 +494,32 @@ By deploying GST Sentinel, corporate finance departments can transition from rea
 * **Mitigate Supplier Risk**: Identifies non-compliant sellers, enabling procurement teams to renegotiate payment terms or replace high-risk vendors.
 
 ---
+# Docker Compose: local development
+
+## Prerequisites
+- Docker Desktop (or Docker Engine with the Compose plugin)
+- A long random API key for local API authentication
+
+## Start the stack
+1. Copy `.env.example` to `.env`.
+2. Replace `API_KEY` with a long random secret. Never commit your real `.env`.
+3. If you use Neo4j Aura, set `NEO4J_URI`, `NEO4J_USER`, and `NEO4J_PASSWORD` to your Aura connection values. Neo4j is optional; graph-specific features may be unavailable without it.
+4. From the repository root, run:
+
+   ```bash
+   docker compose up --build -d
+   docker compose ps
+   docker compose logs -f backend
+   ```
+
+The backend waits for MongoDB's health check, and the Streamlit frontend waits for the backend's HTTP health check. The MongoDB, backend, and frontend ports are bound to localhost so they are not exposed directly to your network.
+
+- Dashboard: http://localhost:8502
+- Backend health endpoint: http://localhost:8001/health
+
+To stop the stack while keeping MongoDB data, run `docker compose down`. To also delete the persisted MongoDB volume, run `docker compose down -v` (this permanently deletes the local database volume).
+
+## Configuration notes
+- Docker Compose requires `API_KEY` to be set in `.env`; requests to protected backend routes must use the same key in the `X-API-Key` header.
+- The Compose default MongoDB URI uses the internal service name `mongodb`. For MongoDB Atlas, set `MONGO_URI` in `.env` to your Atlas connection string.
+- Do not use real secrets in `.env.example`, screenshots, or committed files.
