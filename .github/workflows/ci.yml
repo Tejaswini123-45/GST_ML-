@@ -29,5 +29,5 @@ jobs:
       - name: Compile Python files
         run: python -m compileall -q backend frontend scripts
 
-      - name: Run unit tests
-        run: pytest -q
+      - name: Run validation unit tests
+        run: pytest -q tests/
