@@ -1,26 +1,49 @@
-version: '3.8'
-
 services:
+  mongodb:
+    image: mongo:6.0
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
   backend:
     build:
       context: .
       dockerfile: Dockerfile
-    command: uvicorn backend.main:app --host 0.0.0.0 --port 8001 --workers 4
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8001 --workers 1
     ports:
-      - "8001:8001"
+      - "127.0.0.1:8001:8001"
     environment:
-      - PORT=8001
-      - DEBUG=False
-      - MONGO_URI=mongodb://mongodb:27017
-      - MONGO_DB_NAME=gst_reconciliation
-      # Use localhost or override via environment if connecting to Neo4j
-      - NEO4J_URI=bolt://neo4j:7687
-      - NEO4J_USER=neo4j
-      - NEO4J_PASSWORD=password
-      - API_KEY=${API_KEY}
-    restart: always
+      PORT: "8001"
+      DEBUG: "False"
+      MONGO_URI: ${MONGO_URI:-mongodb://mongodb:27017}
+      MONGO_DB_NAME: ${MONGO_DB_NAME:-gst_reconciliation}
+      NEO4J_URI: ${NEO4J_URI:-bolt://neo4j:7687}
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
+      API_KEY: ${API_KEY:?Set API_KEY in your .env file before starting Docker Compose}
+      ALLOWED_ORIGINS_RAW: ${ALLOWED_ORIGINS_RAW:-http://localhost:8502}
+    restart: unless-stopped
     depends_on:
-      - mongodb
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/', timeout=3)"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   frontend:
     build:
@@ -28,21 +51,14 @@ services:
       dockerfile: Dockerfile
     command: streamlit run frontend/dashboard.py --server.port 8502 --server.address 0.0.0.0
     ports:
-      - "8502:8502"
+      - "127.0.0.1:8502:8502"
     environment:
-      - BACKEND_URL=http://backend:8001
-      - API_KEY=${API_KEY}
-    restart: always
+      BACKEND_URL: http://backend:8001
+      API_KEY: ${API_KEY:?Set API_KEY in your .env file before starting Docker Compose}
+    restart: unless-stopped
     depends_on:
-      - backend
-
-  mongodb:
-    image: mongo:6.0
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo_data:/data/db
-    restart: always
+      backend:
+        condition: service_healthy
 
 volumes:
   mongo_data:
