@@ -30,4 +30,6 @@ jobs:
         run: python -m compileall -q backend frontend scripts
 
       - name: Run validation unit tests
+        env:
+          PYTHONPATH: .
         run: pytest -q tests/
