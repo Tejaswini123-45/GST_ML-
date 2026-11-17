@@ -1,13 +1,17 @@
-name: CI
+name: GST Sentinel CI/CD
 
 on:
   push:
-    branches: [main, ea-devops-upgrade]
+    branches: [main, ci-cd-ghcr-railway]
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   test:
+    name: Test application
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -29,7 +33,65 @@ jobs:
       - name: Compile Python files
         run: python -m compileall -q backend frontend scripts
 
-      - name: Run validation unit tests
+      - name: Run validation tests
         env:
           PYTHONPATH: .
         run: pytest -q tests/
+
+  publish:
+    name: Build and publish Docker image
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Prepare lowercase image name
+        id: image
+        run: |
+          IMAGE_NAME="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "name=${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate image tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trigger Railway deployment
+        env:
+          RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$RAILWAY_DEPLOY_HOOK" ]; then
+            curl --fail --silent --show-error --request POST "$RAILWAY_DEPLOY_HOOK"
+          else
+            echo "RAILWAY_DEPLOY_HOOK is not configured yet; skipping deployment trigger."
+          fi
