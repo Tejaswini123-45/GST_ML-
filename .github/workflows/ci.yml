@@ -87,8 +87,11 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Trigger Railway deployment
-        if: ${{ secrets.RAILWAY_DEPLOY_HOOK != '' }}
         env:
           RAILWAY_DEPLOY_HOOK: ${{ secrets.RAILWAY_DEPLOY_HOOK }}
         run: |
-          curl --fail --silent --show-error --request POST "$RAILWAY_DEPLOY_HOOK"
+          if [ -n "$RAILWAY_DEPLOY_HOOK" ]; then
+            curl --fail --silent --show-error --request POST "$RAILWAY_DEPLOY_HOOK"
+          else
+            echo "RAILWAY_DEPLOY_HOOK is not configured yet; skipping deployment trigger."
+          fi
